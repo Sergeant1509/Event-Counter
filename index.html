@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Countdown Timer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4f46e5; /* Indigo-600 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0a0a0a;
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            transition: background-image 0.5s ease-in-out;
+        }
+        .time-unit span {
+            transition: all 0.3s ease;
+        }
+        .time-unit.tick span {
+            transform: translateY(-5px);
+            opacity: 0.8;
+            transition: all 0.1s ease;
+        }
+        #fireworks-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: none;
+        }
+        .icon-btn {
+            background-color: rgba(0,0,0,0.3);
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.2s ease;
+        }
+        .icon-btn:hover {
+            background-color: rgba(0,0,0,0.5);
+            transform: scale(1.1);
+        }
+        .theme-selector button.active {
+            transform: scale(1.1);
+            box-shadow: 0 0 0 3px var(--primary-color);
+        }
+        #toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translate(-50%, 200%);
+            transition: transform 0.5s ease-in-out;
+            z-index: 50;
+        }
+        #toast.show {
+            transform: translate(-50%, 0);
+        }
+        .bg-primary { background-color: var(--primary-color); }
+        .hover\:bg-primary-hover:hover { filter: brightness(1.2); }
+        .focus\:ring-primary:focus { --tw-ring-color: var(--primary-color); }
+        .focus\:border-primary:focus { border-color: var(--primary-color); }
+        .shadow-primary-hover:hover { box-shadow: 0 10px 15px -3px var(--primary-color), 0 4px 6px -4px var(--primary-color); }
+        
+        /* Focus Mode Styles */
+        .focus-mode #eventNameDisplay,
+        .focus-mode #controls-toolbar {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .focus-mode #timer {
+            transform: scale(1.15) translateY(-20px);
+            transition: transform 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white antialiased">
+    
+    <canvas id="fireworks-canvas"></canvas>
+    <div id="toast" class="bg-green-500 text-white py-2 px-5 rounded-full shadow-lg">Link Copied!</div>
+
+    <div id="main-container" class="min-h-screen flex flex-col items-center justify-center p-4 bg-black/60 backdrop-blur-sm relative transition-all duration-300">
+        
+        <div id="setup-view" class="w-full max-w-lg text-center space-y-8">
+            <header>
+                <h1 class="text-4xl sm:text-5xl font-bold tracking-tight text-white">Event Countdown</h1>
+                <p class="mt-2 text-lg text-slate-300">Set an event and date to start the timer.</p>
+            </header>
+            
+            <div class="bg-slate-800/50 p-8 rounded-2xl shadow-2xl space-y-6 border border-slate-700">
+                <input type="text" id="eventNameInput" placeholder="What's the event?" class="w-full p-4 bg-slate-700 border-2 border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition">
+                <input type="datetime-local" id="eventDateInput" class="w-full p-4 bg-slate-700 border-2 border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition" style="color-scheme: dark;">
+                <button id="startBtn" class="w-full py-4 px-6 bg-primary hover:bg-primary-hover rounded-lg text-white font-bold text-lg shadow-lg shadow-primary-hover transition-all duration-300 transform hover:scale-105 disabled:bg-slate-600 disabled:cursor-not-allowed disabled:scale-100 disabled:shadow-none">
+                    Start Countdown
+                </button>
+                <p id="error-message" class="text-red-400 h-4"></p>
+            </div>
+            
+            <div class="theme-selector pt-4">
+                <p class="text-slate-400 mb-3">Choose a theme:</p>
+                <div id="theme-buttons" class="flex justify-center gap-3 flex-wrap">
+                    <!-- Theme buttons will be injected here by JS -->
+                </div>
+            </div>
+        </div>
+
+        <div id="countdown-view" class="hidden w-full max-w-4xl text-center">
+            <h2 id="eventNameDisplay" class="text-4xl sm:text-6xl font-bold tracking-tight text-white mb-8 transition-opacity duration-300"></h2>
+            
+            <div id="timer" class="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-8 transition-transform duration-300">
+                 <div class="time-unit bg-slate-800/50 p-6 rounded-2xl shadow-2xl border border-slate-700"><span id="days" class="text-5xl sm:text-7xl font-black tracking-tighter">00</span><p class="text-slate-400 text-sm sm:text-base font-bold uppercase tracking-widest mt-2">Days</p></div>
+                 <div class="time-unit bg-slate-800/50 p-6 rounded-2xl shadow-2xl border border-slate-700"><span id="hours" class="text-5xl sm:text-7xl font-black tracking-tighter">00</span><p class="text-slate-400 text-sm sm:text-base font-bold uppercase tracking-widest mt-2">Hours</p></div>
+                 <div class="time-unit bg-slate-800/50 p-6 rounded-2xl shadow-2xl border border-slate-700"><span id="minutes" class="text-5xl sm:text-7xl font-black tracking-tighter">00</span><p class="text-slate-400 text-sm sm:text-base font-bold uppercase tracking-widest mt-2">Minutes</p></div>
+                 <div class="time-unit bg-slate-800/50 p-6 rounded-2xl shadow-2xl border border-slate-700"><span id="seconds" class="text-5xl sm:text-7xl font-black tracking-tighter">00</span><p class="text-slate-400 text-sm sm:text-base font-bold uppercase tracking-widest mt-2">Seconds</p></div>
+            </div>
+
+            <div id="controls-toolbar" class="mt-12 flex justify-center items-center gap-4 transition-opacity duration-300">
+                <button id="resetBtnCountdown" class="py-3 px-6 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-semibold transition-all">Set new event</button>
+                <button id="shareBtn" class="icon-btn rounded-full p-3 text-white" title="Share Countdown">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                </button>
+                <button id="muteBtn" class="icon-btn rounded-full p-3 text-white" title="Mute/Unmute Sounds">
+                    <span id="unmuted-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg></span>
+                    <span id="muted-icon" class="hidden"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg></span>
+                </button>
+                <button id="focusBtn" class="icon-btn rounded-full p-3 text-white" title="Toggle Focus Mode">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <div id="complete-view" class="hidden w-full max-w-2xl text-center space-y-6">
+            <h2 id="completeMessage" class="text-4xl sm:text-6xl font-bold tracking-tight text-white"></h2>
+            <p class="text-5xl">🎉</p>
+            <button id="resetBtnComplete" class="py-3 px-6 bg-primary hover:bg-primary-hover rounded-lg text-white font-bold text-lg shadow-lg shadow-primary-hover transition-all">Start Another</button>
+        </div>
+    </div>
+    
+    <script>
+        // --- DOM Elements ---
+        const mainContainer = document.getElementById('main-container');
+        const setupView = document.getElementById('setup-view');
+        const countdownView = document.getElementById('countdown-view');
+        const completeView = document.getElementById('complete-view');
+        const eventNameInput = document.getElementById('eventNameInput');
+        const eventDateInput = document.getElementById('eventDateInput');
+        const startBtn = document.getElementById('startBtn');
+        const errorMessage = document.getElementById('error-message');
+        const eventNameDisplay = document.getElementById('eventNameDisplay');
+        const daysEl = document.getElementById('days');
+        const hoursEl = document.getElementById('hours');
+        const minutesEl = document.getElementById('minutes');
+        const secondsEl = document.getElementById('seconds');
+        const timeUnits = document.querySelectorAll('.time-unit');
+        const completeMessage = document.getElementById('completeMessage');
+        const resetBtnCountdown = document.getElementById('resetBtnCountdown');
+        const resetBtnComplete = document.getElementById('resetBtnComplete');
+        const shareBtn = document.getElementById('shareBtn');
+        const muteBtn = document.getElementById('muteBtn');
+        const unmutedIcon = document.getElementById('unmuted-icon');
+        const mutedIcon = document.getElementById('muted-icon');
+        const focusBtn = document.getElementById('focusBtn');
+        const toast = document.getElementById('toast');
+        const themeButtonsContainer = document.getElementById('theme-buttons');
+
+        let countdownInterval, fireworksInterval, animationFrameId;
+        let isMuted = false;
+
+        // --- THEMES ---
+        const themes = [
+            { name: 'Celebration', imageUrl: 'https://images.unsplash.com/photo-1517299321609-52485ae3c1bf?auto=format&fit=crop&q=80&w=2070', color: '#4f46e5' },
+            { name: 'Concert', imageUrl: 'https://images.unsplash.com/photo-1504680162522-3a3a8f11a8a2?auto=format&fit=crop&q=80&w=2070', color: '#be185d' },
+            { name: 'Holiday', imageUrl: 'https://images.unsplash.com/photo-1546294231-1b33ac458a47?auto=format&fit=crop&q=80&w=2070', color: '#059669' },
+            { name: 'Launch', imageUrl: 'https://images.unsplash.com/photo-1541185934-01b600ea069c?auto=format&fit=crop&q=80&w=2070', color: '#d97706' },
+            { name: 'Cosmic', imageUrl: 'https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?auto=format&fit=crop&q=80&w=2071', color: '#9333ea' },
+            { name: 'Nature', imageUrl: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&q=80&w=2071', color: '#16a34a' },
+            { name: 'Gaming', imageUrl: 'https://images.unsplash.com/photo-1580327344181-c1163234e5a0?auto=format&fit=crop&q=80&w=2070', color: '#dc2626' },
+            { name: 'Minimal', imageUrl: 'https://images.unsplash.com/photo-1533035353720-f1c6a75cd8ab?auto=format&fit=crop&q=80&w=1887', color: '#64748b' },
+        ];
+
+        function applyTheme(themeName) {
+            const theme = themes.find(t => t.name === themeName);
+            if (!theme) return;
+            document.body.style.backgroundImage = `url('${theme.imageUrl}')`;
+            document.documentElement.style.setProperty('--primary-color', theme.color);
+            localStorage.setItem('countdownTheme', themeName);
+            document.querySelectorAll('.theme-selector button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.theme === themeName);
+            });
+        }
+        
+        // --- Sound Effects & Mute Logic ---
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            mutedIcon.classList.toggle('hidden', !isMuted);
+            unmutedIcon.classList.toggle('hidden', isMuted);
+            localStorage.setItem('countdownMuted', isMuted);
+        }
+
+        function playTickSound() {
+            if (isMuted || audioContext.state === 'suspended') return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            oscillator.start();
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.1);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+
+        function playCompleteSound() {
+            if (isMuted || audioContext.state === 'suspended') return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.type = 'triangle';
+            oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.2);
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.5);
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.5);
+        }
+
+        function playFireworkLaunchSound() {
+            if (isMuted || audioContext.state === 'suspended') return;
+            const noiseSource = audioContext.createBufferSource();
+            const bufferSize = audioContext.sampleRate * 0.5;
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
+            noiseSource.buffer = buffer;
+            const bandpass = audioContext.createBiquadFilter();
+            bandpass.type = 'bandpass';
+            bandpass.frequency.setValueAtTime(100, audioContext.currentTime);
+            bandpass.Q.setValueAtTime(1, audioContext.currentTime);
+            const gainNode = audioContext.createGain();
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.4);
+            noiseSource.connect(bandpass).connect(gainNode).connect(audioContext.destination);
+            bandpass.frequency.exponentialRampToValueAtTime(2000, audioContext.currentTime + 0.5);
+            noiseSource.start();
+            noiseSource.stop(audioContext.currentTime + 0.5);
+        }
+
+        function playFireworkExplodeSound() {
+            if (isMuted || audioContext.state === 'suspended') return;
+            const fundamental = 200; const ratios = [0.8, 1, 1.2, 1.5, 2, 3]; const duration = 0.8;
+            for (let i = 0; i < 15; i++) {
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                const time = audioContext.currentTime + Math.random() * 0.2;
+                osc.type = 'sawtooth';
+                osc.frequency.value = fundamental * ratios[Math.floor(Math.random() * ratios.length)] + Math.random() * 500;
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                gain.gain.setValueAtTime(0.15, time);
+                gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+                osc.start(time);
+                osc.stop(time + duration);
+            }
+        }
+
+        // --- Focus Mode ---
+        function toggleFocusMode() {
+            mainContainer.classList.toggle('focus-mode');
+        }
+        
+        // --- Fireworks Logic ---
+        const fireworksCanvas = document.getElementById('fireworks-canvas');
+        const ctx = fireworksCanvas.getContext('2d');
+        let fireworks = [], particles = [];
+        function setupCanvas() { fireworksCanvas.width = window.innerWidth; fireworksCanvas.height = window.innerHeight; }
+        function hslToRgb(h, s, l) { let r, g, b; if (s == 0) { r = g = b = l; } else { const hue2rgb = (p, q, t) => { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; }; const q = l < 0.5 ? l * (1 + s) : l + s - l * s; const p = 2 * l - q; r = hue2rgb(p, q, h + 1 / 3); g = hue2rgb(p, q, h); b = hue2rgb(p, q, h - 1 / 3); } return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}`; }
+        class Particle { constructor(x, y, color, velocity) { this.x = x; this.y = y; this.color = color; this.velocity = velocity; this.alpha = 1; this.friction = 0.98; this.gravity = 0.03; } draw() { ctx.save(); ctx.globalAlpha = this.alpha; ctx.beginPath(); ctx.arc(this.x, this.y, 2, 0, Math.PI * 2, false); ctx.fillStyle = this.color; ctx.fill(); ctx.restore(); } update() { this.velocity.x *= this.friction; this.velocity.y *= this.friction; this.velocity.y += this.gravity; this.x += this.velocity.x; this.y += this.velocity.y; this.alpha -= 0.015; this.draw(); } }
+        class Firework { constructor(x, y, targetX, targetY) { this.x = x; this.y = y; this.targetX = targetX; this.targetY = targetY; this.color = hslToRgb(Math.random(), 0.5, 0.5); const angle = Math.atan2(targetY - y, targetX - x); const speed = 8; this.velocity = { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }; } update() { if (Math.hypot(this.targetX - this.x, this.targetY - this.y) < 5) { this.explode(); fireworks.splice(fireworks.indexOf(this), 1); } else { this.x += this.velocity.x; this.y += this.velocity.y; } } draw() { ctx.beginPath(); ctx.arc(this.x, this.y, 3, 0, Math.PI * 2); ctx.fillStyle = this.color; ctx.fill(); } explode() { playFireworkExplodeSound(); const particleCount = 100; const angleIncrement = (Math.PI * 2) / particleCount; for (let i = 0; i < particleCount; i++) { const power = Math.random() * 5 + 2; particles.push(new Particle(this.x, this.y, this.color, { x: Math.cos(angleIncrement * i) * power, y: Math.sin(angleIncrement * i) * power })); } } }
+        function animateFireworks() { animationFrameId = requestAnimationFrame(animateFireworks); ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; ctx.fillRect(0, 0, fireworksCanvas.width, fireworksCanvas.height); fireworks.forEach(f => { f.update(); f.draw(); }); particles.forEach((p, i) => { if (p.alpha > 0) p.update(); else particles.splice(i, 1); }); }
+        function launchFireworks() { fireworksCanvas.style.display = 'block'; setupCanvas(); animateFireworks(); playCompleteSound(); fireworksInterval = setInterval(() => { const startX = fireworksCanvas.width / 2; const startY = fireworksCanvas.height; const targetX = Math.random() * fireworksCanvas.width; const targetY = Math.random() * fireworksCanvas.height / 2; fireworks.push(new Firework(startX, startY, targetX, targetY)); playFireworkLaunchSound(); }, 800); }
+        
+        function validateInputs() { const eventName = eventNameInput.value; const eventDateValue = eventDateInput.value; const eventDate = new Date(eventDateValue); const now = new Date(); let error = ''; if (!eventName || !eventDateValue) { error = 'Please fill in both fields.'; } else if (eventDate <= now) { error = 'Please select a date in the future.'; } errorMessage.textContent = error; startBtn.disabled = !!error; }
+        function updateCountdown(targetDate, eventName) { const now = new Date(); const totalSeconds = (targetDate - now) / 1000; if (totalSeconds <= 0) { clearInterval(countdownInterval); countdownView.classList.add('hidden'); completeView.classList.remove('hidden'); completeMessage.textContent = `${eventName} has started!`; launchFireworks(); return; } const days = Math.floor(totalSeconds / 3600 / 24); const hours = Math.floor(totalSeconds / 3600) % 24; const minutes = Math.floor(totalSeconds / 60) % 60; const seconds = Math.floor(totalSeconds) % 60; timeUnits.forEach(unit => unit.classList.add('tick')); setTimeout(() => { timeUnits.forEach(unit => unit.classList.remove('tick')); }, 150); daysEl.textContent = String(days).padStart(2, '0'); hoursEl.textContent = String(hours).padStart(2, '0'); minutesEl.textContent = String(minutes).padStart(2, '0'); secondsEl.textContent = String(seconds).padStart(2, '0'); }
+        
+        function startCountdown(eventName, targetDate) { 
+            if (!eventName || !targetDate || targetDate <= new Date()) { validateInputs(); return; }
+            if (audioContext.state === 'suspended') { audioContext.resume(); }
+            eventNameDisplay.textContent = eventName; setupView.classList.add('hidden'); countdownView.classList.remove('hidden'); completeView.classList.add('hidden'); 
+            updateCountdown(targetDate, eventName); 
+            countdownInterval = setInterval(() => { updateCountdown(targetDate, eventName); playTickSound(); }, 1000); 
+        }
+        function resetViews() { clearInterval(countdownInterval); clearInterval(fireworksInterval); cancelAnimationFrame(animationFrameId); fireworksCanvas.style.display = 'none'; ctx.clearRect(0, 0, fireworksCanvas.width, fireworksCanvas.height); fireworks = []; particles = []; countdownView.classList.add('hidden'); completeView.classList.add('hidden'); setupView.classList.remove('hidden'); eventNameInput.value = ''; eventDateInput.value = ''; mainContainer.classList.remove('focus-mode'); window.history.pushState({}, '', window.location.pathname); validateInputs(); }
+        function shareCountdown() { const eventName = eventNameDisplay.textContent; const url = new URL(window.location.href); const targetDate = new Date(url.searchParams.get('date') || eventDateInput.value); const shareUrl = new URL(window.location.pathname, window.location.origin); shareUrl.searchParams.set('event', eventName); shareUrl.searchParams.set('date', targetDate.toISOString()); const tempInput = document.createElement('input'); tempInput.style.position = 'absolute'; tempInput.style.left = '-9999px'; tempInput.value = shareUrl.toString(); document.body.appendChild(tempInput); tempInput.select(); document.execCommand('copy'); document.body.removeChild(tempInput); toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 3000); }
+        
+        // --- Event Listeners and Initializers ---
+        document.addEventListener('DOMContentLoaded', () => {
+            themes.forEach(theme => {
+                const button = document.createElement('button');
+                button.className = 'w-10 h-10 rounded-full border-2 border-slate-500 transition bg-center bg-cover';
+                button.style.backgroundImage = `url('${theme.imageUrl}')`;
+                button.dataset.theme = theme.name;
+                button.title = theme.name;
+                button.addEventListener('click', () => applyTheme(theme.name));
+                themeButtonsContainer.appendChild(button);
+            });
+            const savedTheme = localStorage.getItem('countdownTheme') || 'Celebration';
+            applyTheme(savedTheme);
+
+            const savedMuteState = localStorage.getItem('countdownMuted') === 'true';
+            if(savedMuteState) toggleMute();
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const eventFromUrl = urlParams.get('event');
+            const dateFromUrl = urlParams.get('date');
+            if(eventFromUrl && dateFromUrl) {
+                const targetDate = new Date(dateFromUrl);
+                if (targetDate > new Date()) {
+                    eventNameInput.value = eventFromUrl;
+                    eventDateInput.value = targetDate.toISOString().slice(0, 16);
+                    startCountdown(eventFromUrl, targetDate);
+                }
+            }
+        });
+        
+        startBtn.addEventListener('click', () => startCountdown(eventNameInput.value, new Date(eventDateInput.value)));
+        resetBtnCountdown.addEventListener('click', resetViews);
+        resetBtnComplete.addEventListener('click', resetViews);
+        shareBtn.addEventListener('click', shareCountdown);
+        muteBtn.addEventListener('click', toggleMute);
+        focusBtn.addEventListener('click', toggleFocusMode);
+        eventNameInput.addEventListener('input', validateInputs);
+        eventDateInput.addEventListener('input', validateInputs);
+        window.addEventListener('resize', setupCanvas);
+        validateInputs();
+    </script>
+</body>
+</html>
+
